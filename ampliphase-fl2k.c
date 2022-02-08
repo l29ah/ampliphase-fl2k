@@ -149,6 +149,7 @@ static void fl2k_callback(fl2k_data_info_t *data_info)
 		unsigned samples_per_input_sample = samples_until_next_input();
 		switch (modulation_mode) {
 		case AMPLIPHASE_MODE:
+			;
 			int sample = audio_samples[i];
 			generate_shifted_carrier(txbuf_r + buf_offset, samples_per_input_sample, 1, sample, &carrier_offset[0]);
 			generate_shifted_carrier(txbuf_g + buf_offset, samples_per_input_sample, -1, -sample, &carrier_offset[1]);
