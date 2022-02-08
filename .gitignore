@@ -1,0 +1,4 @@
+*.o
+*.sw?
+ampliphase-fl2k
+.gdb_history
