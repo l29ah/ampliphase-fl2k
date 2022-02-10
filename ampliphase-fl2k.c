@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
 
 	input_file = stdin;
 	int c;
-	while ((c = getopt(argc, argv, "f:hiS:s:")) != -1) {
+	while ((c = getopt(argc, argv, "f:F:hiS:s:")) != -1) {
 		switch (c) {
 		case 'f':
 			if (optarg) {
@@ -213,9 +213,17 @@ int main(int argc, char *argv[])
 				}
 			}
 			break;
+		case 'F':
+			if (optarg) {
+				if (sscanf(optarg, "%lf", &carrier_frequency) < 1) {
+					fprintf(stderr, "Couldn't read the desired carrier frequency!\n");
+					goto out;
+				}
+			}
+			break;
 		case '?':
 		case 'h':
-			fprintf(stderr, "Usage: %s [-f <file name>] [-i] [-s <fl2k sample rate>] [-S <input sample rate>]\n", argv[0]);
+			fprintf(stderr, "Usage: %s [-f <file name>] [-F <carrier frequency>] [-i] [-s <fl2k sample rate>] [-S <input sample rate>]\n", argv[0]);
 			goto out;
 			break;
 		case 'i':
