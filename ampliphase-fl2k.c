@@ -45,7 +45,7 @@ static unsigned generate_carrier(uint8_t *target_buf, size_t len)
 		} else {
 			samples_ones = samples_per_carrier_halfperiod;
 		}
-		memset(target_buf, 0xff, samples_ones);
+		memset(target_buf + offset, 0xff, samples_ones);
 		if (samples_ones < samples_per_carrier_halfperiod) {
 			return samples_ones;
 		}
@@ -57,7 +57,7 @@ static unsigned generate_carrier(uint8_t *target_buf, size_t len)
 		} else {
 			samples_zeroes = samples_per_carrier_halfperiod;
 		}
-		memset(target_buf, 0, samples_zeroes);
+		memset(target_buf + offset, 0, samples_zeroes);
 		if (samples_zeroes < samples_per_carrier_halfperiod) {
 			return samples_zeroes;
 		}
