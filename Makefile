@@ -1,4 +1,4 @@
-CFLAGS += -std=c11 -D_DEFAULT_SOURCE -Wall -Werror
+CFLAGS += -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror
 ifdef DEBUG
 	CFLAGS+=-ggdb3 -DDEBUG -O0
 else

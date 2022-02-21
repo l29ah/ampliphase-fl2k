@@ -13,6 +13,10 @@
 #include <limits.h>
 #include <string.h>
 
+#ifndef dprintf
+#define dprintf(args...) ;
+#endif
+
 enum mode_e {
 	AMPLIPHASE_MODE,
 	IQ_MODE,
@@ -23,9 +27,6 @@ static uint32_t samp_rate = 100000000;
 static bool do_exit = false;
 static uint8_t *txbuf_r = NULL;
 static uint8_t *txbuf_g = NULL;
-//static double target_frequency = 1000000;
-//static double period_samples;
-//static unsigned channel = offsetof(fl2k_data_info_t, r_buf);
 static double carrier_frequency = 1000000;
 static unsigned samples_per_carrier_period;
 static unsigned samples_per_carrier_halfperiod;
@@ -46,6 +47,7 @@ static unsigned generate_carrier(uint8_t *target_buf, size_t len)
 			samples_ones = samples_per_carrier_halfperiod;
 		}
 		memset(target_buf + offset, 0xff, samples_ones);
+		dprintf("%d ones\n", samples_ones);
 		if (samples_ones < samples_per_carrier_halfperiod) {
 			return samples_ones;
 		}
@@ -58,36 +60,64 @@ static unsigned generate_carrier(uint8_t *target_buf, size_t len)
 			samples_zeroes = samples_per_carrier_halfperiod;
 		}
 		memset(target_buf + offset, 0, samples_zeroes);
+		dprintf("%d zeroes\n", samples_zeroes);
 		if (samples_zeroes < samples_per_carrier_halfperiod) {
-			return samples_zeroes;
+			return samples_zeroes + samples_per_carrier_halfperiod;
 		}
 		offset += samples_zeroes;
 	}
-	return offset % samples_per_carrier_period;
+	//return offset % samples_per_carrier_period;
 }
 
 // static_shift is specified in 45°'s
 // sample produces a 45° shift at 2^15
-static void generate_shifted_carrier(uint8_t *target_buf, unsigned carrier_period_samples, double static_shift, int32_t sample, unsigned *carrier_offset)
+static void generate_shifted_carrier(uint8_t *target_buf, unsigned carrier_period_samples, double static_shift, int32_t sample, int *carrier_offset)
 {
 	double phase_shift = (double)sample / 0x8000; // 1 = 45°, so sample ranging from -2^15 to 2^15 gives 90° phase shift range
-	double samples_shift = (samples_per_carrier_period / 8) * (static_shift + phase_shift) + *carrier_offset;
-	unsigned buf_offset = 0;
-	if (samples_shift > 0) {
-		// Generate 0's of the previous period
-		unsigned samples_zeroes_prev = lround(samples_shift);
-		memset(target_buf, 0xff, samples_zeroes_prev);
-		buf_offset += samples_zeroes_prev;
-	} else {
-		// Generate the remaining 1's and 0's of the current period
-		unsigned samples_ones = lround(-samples_shift);
-		memset(target_buf, 0, samples_ones);
-		buf_offset += samples_ones;
-		memset(target_buf + buf_offset, 0xff, samples_per_carrier_halfperiod);
-		buf_offset += samples_per_carrier_halfperiod;
+	double absolute_samples_shift = (samples_per_carrier_period / 8) * (static_shift + phase_shift);
+	double samples_shift = absolute_samples_shift + *carrier_offset;
+	uint8_t *target_buf_start = target_buf;
+
+	// normalize shifts
+	if (samples_shift < 0) {
+		samples_shift += (unsigned)(-samples_shift / samples_per_carrier_period) * samples_per_carrier_period;
 	}
-	unsigned remaining_carrier_period_samples = carrier_period_samples - buf_offset;
-	*carrier_offset = generate_carrier(target_buf + buf_offset, remaining_carrier_period_samples);
+	if (samples_shift > samples_per_carrier_period) {
+		samples_shift -= (unsigned)(samples_shift / samples_per_carrier_period) * samples_per_carrier_period;
+	}
+
+	// FIXME dedup
+	if (samples_shift < -(double)samples_per_carrier_halfperiod) {
+		unsigned samples = -samples_shift - samples_per_carrier_halfperiod;
+		memset(target_buf, 0xff, samples);
+		dprintf("%d ones\n", samples);
+		samples_shift += samples;
+		target_buf += samples;
+	}
+	if (samples_shift < 0) {
+		unsigned samples = -samples_shift;
+		memset(target_buf, 0, samples);
+		dprintf("%d zeroes\n", samples);
+		samples_shift = 0;
+		target_buf += samples;
+	}
+	if (samples_shift <= samples_per_carrier_halfperiod) {
+		unsigned samples = samples_per_carrier_halfperiod - samples_shift;
+		memset(target_buf, 0xff, samples);
+		dprintf("%d ones\n", samples);
+		samples_shift += samples;
+		target_buf += samples;
+	}
+	if (samples_shift <= samples_per_carrier_period) {
+		unsigned samples = samples_per_carrier_period - samples_shift;
+		memset(target_buf, 0, samples);
+		dprintf("%d zeroes\n", samples);
+		samples_shift += samples;
+		target_buf += samples;
+	}
+
+	unsigned remaining_carrier_period_samples = carrier_period_samples - (target_buf - target_buf_start);
+	*carrier_offset = generate_carrier(target_buf, remaining_carrier_period_samples) - absolute_samples_shift;
 }
 
 // How many samples of the carrier do we need to produce before it's time to phase-shift for a new input sample
@@ -144,8 +174,8 @@ static void fl2k_callback(fl2k_data_info_t *data_info)
 	memcpy(txbuf_r, txbuf_r + FL2K_BUF_LEN, buffer_phase_shift);
 	memcpy(txbuf_g, txbuf_g + FL2K_BUF_LEN, buffer_phase_shift);
 	buf_offset = buffer_phase_shift;
-	for (int i = 0; i < read_samples; ++i) {
-		static unsigned carrier_offset[2] = { 0 };
+	for (unsigned i = 0; i < read_samples; ++i) {
+		static int carrier_offset[2] = { 0 };
 		unsigned samples_per_input_sample = samples_until_next_input();
 		switch (modulation_mode) {
 		case AMPLIPHASE_MODE:
