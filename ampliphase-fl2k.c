@@ -277,9 +277,11 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Couldn't start the transmission.\n");
 	}
 
+	// TODO eliminate polling
 	while (!do_exit) {
 		sleep(1);
 	}
+	fl2k_stop_tx(dev);
 	fl2k_close(dev);
 
 out:
